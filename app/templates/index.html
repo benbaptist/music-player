@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audacious Web Player</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div class="flex flex-col md:flex-row min-h-screen">
+        <!-- Sidebar for Mobile (Hidden by Default) -->
+        <div id="mobile-sidebar" class="fixed inset-0 bg-gray-900 z-50 hidden">
+            <div class="flex justify-end p-4">
+                <button id="close-sidebar" class="text-white">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="p-4">
+                <h2 class="text-xl font-bold mb-4">Playlists</h2>
+                <ul id="mobile-playlist-list" class="space-y-2">
+                    <!-- Playlists will be populated here -->
+                    <li class="animate-pulse h-6 bg-gray-700 rounded w-3/4"></li>
+                    <li class="animate-pulse h-6 bg-gray-700 rounded w-2/3"></li>
+                </ul>
+                
+                <div class="mt-6">
+                    <h2 class="text-xl font-bold mb-4">Files</h2>
+                    <div id="mobile-file-browser" class="space-y-2">
+                        <!-- File browser content will be populated here -->
+                        <div class="animate-pulse h-6 bg-gray-700 rounded w-5/6"></div>
+                        <div class="animate-pulse h-6 bg-gray-700 rounded w-4/5"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar for Desktop -->
+        <div class="hidden md:flex md:flex-col md:w-80 border-r border-gray-800 bg-gray-900 h-screen overflow-y-auto">
+            <div class="p-4">
+                <h2 class="text-xl font-bold mb-4">Playlists</h2>
+                <ul id="playlist-list" class="space-y-2">
+                    <!-- Playlists will be populated here -->
+                    <li class="animate-pulse h-6 bg-gray-700 rounded w-3/4"></li>
+                    <li class="animate-pulse h-6 bg-gray-700 rounded w-2/3"></li>
+                </ul>
+                
+                <div class="mt-8 flex justify-between">
+                    <button id="new-playlist-btn" class="bg-indigo-600 hover:bg-indigo-700 rounded px-3 py-1 text-sm">
+                        New Playlist
+                    </button>
+                    <button id="rename-playlist-btn" class="bg-gray-700 hover:bg-gray-600 rounded px-3 py-1 text-sm">
+                        Rename
+                    </button>
+                    <button id="delete-playlist-btn" class="bg-red-600 hover:bg-red-700 rounded px-3 py-1 text-sm">
+                        Delete
+                    </button>
+                </div>
+                
+                <div class="mt-8">
+                    <h2 class="text-xl font-bold mb-4">Files</h2>
+                    <div id="file-browser" class="space-y-2">
+                        <!-- File browser content will be populated here -->
+                        <div class="animate-pulse h-6 bg-gray-700 rounded w-5/6"></div>
+                        <div class="animate-pulse h-6 bg-gray-700 rounded w-4/5"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col min-h-screen">
+            <!-- App Bar for Mobile -->
+            <div class="md:hidden bg-gray-800 p-4 flex items-center justify-between">
+                <button id="open-sidebar" class="text-white">
+                    <span class="material-icons">menu</span>
+                </button>
+                <h1 class="text-xl font-bold">Audacious Web Player</h1>
+                <button id="open-settings" class="text-white">
+                    <span class="material-icons">settings</span>
+                </button>
+            </div>
+            
+            <!-- Settings Modal -->
+            <div id="settings-modal" class="fixed inset-0 bg-gray-900 bg-opacity-90 z-50 hidden flex items-center justify-center">
+                <div class="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-bold">Settings</h2>
+                        <button id="close-settings" class="text-white">
+                            <span class="material-icons">close</span>
+                        </button>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <span>Repeat Playlist</span>
+                            <button id="toggle-repeat" class="relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none bg-gray-700">
+                                <span id="repeat-indicator" class="inline-block w-4 h-4 transform translate-x-1 bg-white rounded-full transition-transform"></span>
+                            </button>
+                        </div>
+                        
+                        <div class="flex items-center justify-between">
+                            <span>Shuffle Playlist</span>
+                            <button id="toggle-shuffle" class="relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none bg-gray-700">
+                                <span id="shuffle-indicator" class="inline-block w-4 h-4 transform translate-x-1 bg-white rounded-full transition-transform"></span>
+                            </button>
+                        </div>
+                        
+                        <div class="flex items-center justify-between">
+                            <span>Stop After Current Song</span>
+                            <button id="toggle-stop-after" class="relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none bg-gray-700">
+                                <span id="stop-after-indicator" class="inline-block w-4 h-4 transform translate-x-1 bg-white rounded-full transition-transform"></span>
+                            </button>
+                        </div>
+                        
+                        <div class="flex items-center justify-between">
+                            <span>Auto Advance</span>
+                            <button id="toggle-auto-advance" class="relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none bg-gray-700">
+                                <span id="auto-advance-indicator" class="inline-block w-4 h-4 transform translate-x-1 bg-white rounded-full transition-transform"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Current Song Info -->
+            <div class="flex-1 flex flex-col items-center justify-center p-6">
+                <div id="no-song-playing" class="text-center">
+                    <span class="material-icons text-7xl text-gray-500 mb-4">music_note</span>
+                    <p class="text-gray-500 text-xl">No song playing</p>
+                </div>
+                
+                <div id="current-song-info" class="text-center hidden w-full max-w-md">
+                    <h2 id="song-title" class="text-2xl font-bold mb-2 truncate">Loading...</h2>
+                    <p id="song-artist" class="text-gray-400 mb-1 truncate">Loading...</p>
+                    <p id="song-album" class="text-gray-500 mb-6 truncate">Loading...</p>
+                    
+                    <!-- Seek Bar -->
+                    <div class="w-full mb-4">
+                        <div class="flex justify-between text-xs text-gray-500 mb-1">
+                            <span id="current-time">0:00</span>
+                            <span id="total-time">0:00</span>
+                        </div>
+                        <div class="relative h-2 bg-gray-700 rounded-full">
+                            <div id="progress-bar" class="absolute h-full bg-indigo-600 rounded-full" style="width: 0%"></div>
+                            <input id="seek-slider" type="range" min="0" max="100" value="0" class="absolute w-full h-full opacity-0 cursor-pointer">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Now Playing List (Desktop) -->
+            <div class="hidden md:block border-t border-gray-800 p-4 h-64 overflow-y-auto">
+                <h3 class="text-lg font-bold mb-3">Now Playing</h3>
+                <ul id="now-playing-list" class="space-y-2">
+                    <!-- Current playlist songs will be populated here -->
+                    <li class="animate-pulse h-6 bg-gray-700 rounded w-full"></li>
+                    <li class="animate-pulse h-6 bg-gray-700 rounded w-full"></li>
+                </ul>
+            </div>
+            
+            <!-- Player Controls -->
+            <div class="bg-gray-800 p-4">
+                <!-- Volume Control -->
+                <div class="flex items-center mb-4 justify-center md:justify-end">
+                    <span class="material-icons text-gray-400 mr-2">volume_down</span>
+                    <div class="relative w-32 h-2 bg-gray-700 rounded-full">
+                        <div id="volume-level" class="absolute h-full bg-indigo-600 rounded-full" style="width: 50%"></div>
+                        <input id="volume-slider" type="range" min="0" max="100" value="50" class="absolute w-full h-full opacity-0 cursor-pointer">
+                    </div>
+                </div>
+                
+                <!-- Playback Controls -->
+                <div class="flex justify-center space-x-6">
+                    <button id="previous-btn" class="text-gray-400 hover:text-white">
+                        <span class="material-icons text-3xl">skip_previous</span>
+                    </button>
+                    <button id="play-pause-btn" class="text-white bg-indigo-600 hover:bg-indigo-700 rounded-full p-2">
+                        <span id="play-pause-icon" class="material-icons text-3xl">play_arrow</span>
+                    </button>
+                    <button id="next-btn" class="text-gray-400 hover:text-white">
+                        <span class="material-icons text-3xl">skip_next</span>
+                    </button>
+                </div>
+                
+                <!-- Settings Button for Desktop -->
+                <div class="hidden md:flex justify-center mt-4">
+                    <button id="desktop-open-settings" class="flex items-center text-gray-400 hover:text-white">
+                        <span class="material-icons mr-1">settings</span>
+                        <span>Settings</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Input Dialog Template -->
+    <div id="input-dialog" class="fixed inset-0 bg-gray-900 bg-opacity-90 z-50 hidden flex items-center justify-center">
+        <div class="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 id="dialog-title" class="text-xl font-bold mb-4">Enter Playlist Name</h3>
+            <input id="dialog-input" type="text" class="w-full p-2 bg-gray-700 rounded border border-gray-600 focus:border-indigo-500 focus:outline-none text-white mb-4">
+            <div class="flex justify-end space-x-3">
+                <button id="dialog-cancel" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded">Cancel</button>
+                <button id="dialog-confirm" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html> 
