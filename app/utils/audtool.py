@@ -11,8 +11,11 @@ def run_audtool(command, *args):
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
-        current_app.logger.error(f"Error running audtool command {cmd}: {e}")
-        current_app.logger.error(f"stderr: {e.stderr}")
+        # Don't log errors for status checking commands that use exit codes as return values
+        status_commands = ['playback-playing', 'playback-paused', 'playback-stopped', 'playback-recording']
+        if command not in status_commands:
+            current_app.logger.error(f"Error running audtool command {cmd}: {e}")
+            current_app.logger.error(f"stderr: {e.stderr}")
         return None
 
 # Player control functions
