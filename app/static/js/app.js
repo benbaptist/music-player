@@ -382,7 +382,9 @@ function handleToggleAutoAdvance() {
 
 // Navigate to a directory
 function navigateToDirectory(path) {
-    fetchFileBrowser(path);
+    // Ensure path is decoded before sending to the server
+    const decodedPath = decodeURIComponent(path);
+    fetchFileBrowser(decodedPath);
 }
 
 // Play a file
@@ -483,7 +485,7 @@ function updateUI() {
     }
     
     // Update song info display
-    if (currentSongInfo && currentSongInfo.title) {
+    if (currentSongInfo && currentSongInfo.filename) {
         noSongPlaying.classList.add('hidden');
         currentSongInfoElement.classList.remove('hidden');
         
@@ -523,17 +525,26 @@ function updatePlaylistsUI() {
 // Update the now playing list
 function updateNowPlayingUI(currentPosition) {
     const renderSong = (song) => {
-        const isActive = parseInt(song.position) === parseInt(currentPosition);
+        // Skip songs with missing essential info
+        if (!song || (!song.title && !song.filename)) return '';
+        
+        // Make sure position is a number
+        const position = parseInt(song.position);
+        const isActive = !isNaN(position) && position === parseInt(currentPosition || 0);
+        
+        // Get a display title - use title or filename
+        const displayTitle = song.title || song.filename || 'Unknown Track';
+        
         return `
             <li class="song-item ${isActive ? 'active' : ''}" 
-                data-song-position="${song.position}" 
-                onclick="playPlaylistSong(${song.position})">
+                data-song-position="${position}" 
+                onclick="playPlaylistSong(${position})">
                 <div class="flex items-center justify-between">
                     <div class="truncate flex-1">
-                        <span class="truncate block">${song.title || song.filename}</span>
-                        <span class="text-xs text-gray-500">${song.length}</span>
+                        <span class="truncate block">${displayTitle}</span>
+                        <span class="text-xs text-gray-500">${song.length || '0:00'}</span>
                     </div>
-                    <button class="text-gray-400 hover:text-red-500" onclick="deletePlaylistSong(${song.position}, event)">
+                    <button class="text-gray-400 hover:text-red-500" onclick="deletePlaylistSong(${position}, event)">
                         <span class="material-icons text-sm">close</span>
                     </button>
                 </div>
@@ -541,10 +552,14 @@ function updateNowPlayingUI(currentPosition) {
         `;
     };
     
+    // Filter out invalid songs and render the list
+    const songElements = currentPlaylistSongs
+        .filter(song => song && (song.title || song.filename))
+        .map(renderSong)
+        .join('');
+    
     // Render now playing list
-    nowPlayingList.innerHTML = currentPlaylistSongs.length > 0 
-        ? currentPlaylistSongs.map(renderSong).join('') 
-        : '<li class="text-gray-500">No songs in playlist</li>';
+    nowPlayingList.innerHTML = songElements || '<li class="text-gray-500">No songs in playlist</li>';
 }
 
 // Update the file browser UI
@@ -556,7 +571,7 @@ function updateFileBrowserUI() {
     // Add parent directory link if available
     if (currentDirectory.parent_directory) {
         html += `
-            <div class="file-item" onclick="navigateToDirectory('${currentDirectory.parent_directory}')">
+            <div class="file-item" onclick="navigateToDirectory('${encodeURIComponent(currentDirectory.parent_directory)}')">
                 <div class="flex items-center">
                     <span class="material-icons mr-2 text-yellow-500">arrow_upward</span>
                     <span>Parent Directory</span>
@@ -568,7 +583,7 @@ function updateFileBrowserUI() {
     // Add directories
     currentDirectory.dirs.forEach(dir => {
         html += `
-            <div class="file-item" onclick="navigateToDirectory('${dir.path}')">
+            <div class="file-item" onclick="navigateToDirectory('${encodeURIComponent(dir.path)}')">
                 <div class="flex items-center">
                     <span class="material-icons mr-2 text-yellow-500">folder</span>
                     <span class="truncate">${dir.name}</span>
@@ -587,10 +602,10 @@ function updateFileBrowserUI() {
                         <span class="truncate">${file.name}</span>
                     </div>
                     <div class="flex">
-                        <button class="text-gray-400 hover:text-green-500 mr-2" onclick="playFile('${file.path}')">
+                        <button class="text-gray-400 hover:text-green-500 mr-2" onclick="playFile('${encodeURIComponent(file.path)}')">
                             <span class="material-icons">play_arrow</span>
                         </button>
-                        <button class="text-gray-400 hover:text-blue-500" onclick="addFileToPlaylist('${file.path}')">
+                        <button class="text-gray-400 hover:text-blue-500" onclick="addFileToPlaylist('${encodeURIComponent(file.path)}')">
                             <span class="material-icons">playlist_add</span>
                         </button>
                     </div>

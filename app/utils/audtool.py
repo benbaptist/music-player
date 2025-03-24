@@ -1,6 +1,7 @@
 import subprocess
 import shlex
 from flask import current_app
+import os
 
 def run_audtool(command, *args):
     """Run an audtool command and return its output."""
@@ -24,18 +25,55 @@ def get_current_song():
 
 def get_current_song_info():
     """Get detailed information about the current song."""
-    info = {
-        'title': run_audtool('current-song'),
-        'artist': run_audtool('current-song-tuple-data', 'artist'),
-        'album': run_audtool('current-song-tuple-data', 'album'),
-        'length': run_audtool('current-song-length'),
-        'length_seconds': run_audtool('current-song-length-seconds'),
-        'position': run_audtool('current-song-output-length'),
-        'position_seconds': run_audtool('current-song-output-length-seconds'),
-        'bitrate': run_audtool('current-song-bitrate-kbps'),
-        'filename': run_audtool('current-song-filename')
-    }
-    return info
+    # First check if there's a song playing or if the playlist is empty
+    status = get_playback_status()
+    length = get_playlist_length()
+    
+    if not length or int(length or 0) == 0:
+        return {
+            'title': None,
+            'artist': None,
+            'album': None,
+            'length': None,
+            'length_seconds': 0,
+            'position': None,
+            'position_seconds': 0,
+            'bitrate': None,
+            'filename': None
+        }
+    
+    # Try to get current song info
+    try:
+        info = {
+            'title': run_audtool('current-song'),
+            'artist': run_audtool('current-song-tuple-data', 'artist'),
+            'album': run_audtool('current-song-tuple-data', 'album'),
+            'length': run_audtool('current-song-length'),
+            'length_seconds': run_audtool('current-song-length-seconds') or 0,
+            'position': run_audtool('current-song-output-length'),
+            'position_seconds': run_audtool('current-song-output-length-seconds') or 0,
+            'bitrate': run_audtool('current-song-bitrate-kbps'),
+            'filename': run_audtool('current-song-filename')
+        }
+        
+        # If title is None but we have a filename, use the filename as the title
+        if info['title'] is None and info['filename']:
+            info['title'] = os.path.basename(info['filename'])
+            
+        return info
+    except Exception as e:
+        current_app.logger.error(f"Error getting current song info: {e}")
+        return {
+            'title': None,
+            'artist': None,
+            'album': None,
+            'length': None,
+            'length_seconds': 0,
+            'position': None,
+            'position_seconds': 0,
+            'bitrate': None,
+            'filename': None
+        }
 
 def get_playback_status():
     if run_audtool('playback-playing') is not None:
@@ -86,7 +124,19 @@ def jump_to_song(position):
     return run_audtool('playlist-jump', str(position))
 
 def get_playlist_song(position):
-    return run_audtool('playlist-song', str(position))
+    try:
+        length = get_playlist_length()
+        if not length or int(length) == 0:
+            return None
+            
+        # Make sure position is within valid range
+        position = int(position)
+        if position < 0 or position >= int(length):
+            return None
+            
+        return run_audtool('playlist-song', str(position + 1))  # Audacious uses 1-based indexing
+    except (ValueError, TypeError):
+        return None
 
 def get_all_songs():
     """Get all songs in the current playlist."""
@@ -94,15 +144,33 @@ def get_all_songs():
     if not length:
         return []
     
+    try:
+        length = int(length)
+    except (ValueError, TypeError):
+        return []
+    
     songs = []
-    for i in range(int(length)):
-        song = {
-            'position': i,
-            'title': run_audtool('playlist-song', str(i)),
-            'filename': run_audtool('playlist-song-filename', str(i)),
-            'length': run_audtool('playlist-song-length', str(i))
-        }
-        songs.append(song)
+    for i in range(length):
+        # Try to get song information, handling possible errors
+        try:
+            title = run_audtool('playlist-song', str(i + 1))  # Audacious uses 1-based indexing
+            filename = run_audtool('playlist-song-filename', str(i + 1))
+            song_length = run_audtool('playlist-song-length', str(i + 1))
+            
+            # Skip if we couldn't get the required information
+            if filename is None:
+                continue
+                
+            song = {
+                'position': i,
+                'title': title or os.path.basename(filename or ''),
+                'filename': filename or '',
+                'length': song_length or '0:00'
+            }
+            songs.append(song)
+        except Exception as e:
+            current_app.logger.error(f"Error getting song at position {i}: {e}")
+            continue
     
     return songs
 
