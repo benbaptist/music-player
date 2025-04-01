@@ -233,8 +233,17 @@ def update_settings(playlist_id):
 def play_playlist(playlist_id):
     """Load a playlist into Audacious and start playback."""
     try:
+        # First, ensure we have fully cleared Audacious
+        audtool.clear_playlist()
+        
         # Load the playlist into Audacious
-        PlaylistService.load_playlist_to_audacious(playlist_id)
+        success = PlaylistService.load_playlist_to_audacious(playlist_id)
+        
+        if not success:
+            return jsonify({
+                'success': False,
+                'error': f'Failed to load playlist {playlist_id}'
+            }), 404
         
         # Start playback
         audtool.play()
@@ -383,13 +392,14 @@ def get_current_playlist():
             
         tracks = PlaylistService.get_playlist_tracks(current_playlist.id)
         
-        # Try to get the current position, but handle the case when nothing is playing
+        # Try to get the current position from Audacious if currently playing our playlist
+        # This is optional since we're decoupling playlists from Audacious
         try:
             current_position = audtool.get_playlist_position()
             if current_position is None:
                 current_position = 0
         except Exception:
-            # If audtool command fails, default to 0
+            # If audtool command fails or Audacious isn't playing our playlist, default to 0
             current_position = 0
         
         return jsonify({

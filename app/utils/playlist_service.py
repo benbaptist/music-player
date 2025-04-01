@@ -6,6 +6,8 @@ import glob
 from pathlib import Path
 import subprocess
 import json
+from mutagen import File as MutagenFile
+from datetime import timedelta
 
 # Store the current playlist ID in memory
 # This is a simple solution since we can't modify the database schema
@@ -95,33 +97,63 @@ class PlaylistService:
         track = Track.query.filter_by(filename=track_path).first()
         
         if not track:
-            # Get track metadata using audtool (temporarily add to audacious playlist)
-            # Clear audacious playlist
-            audtool.clear_playlist()
-            
-            # Add track to audacious to get metadata
-            audtool.add_song(track_path)
-            
-            # Get metadata
-            title = audtool.get_playlist_song(0)
-            length = audtool.run_audtool('playlist-song-length', '1')
-            length_seconds = audtool.run_audtool('playlist-song-length-seconds', '1')
-            artist = audtool.run_audtool('playlist-song-tuple-data', '1', 'artist')
-            album = audtool.run_audtool('playlist-song-tuple-data', '1', 'album')
-            
-            # Create the track in our database
-            track = Track(
-                title=title,
-                artist=artist,
-                album=album,
-                length=length,
-                length_seconds=int(length_seconds) if length_seconds else 0,
-                filename=track_path
-            )
-            db.session.add(track)
-            
-            # Clear audacious playlist again
-            audtool.clear_playlist()
+            # Get track metadata using mutagen instead of audacious
+            try:
+                # Default values
+                title = os.path.basename(track_path)
+                artist = None
+                album = None
+                length = "0:00"
+                length_seconds = 0
+                
+                # Extract metadata using mutagen
+                audio = MutagenFile(track_path)
+                if audio:
+                    # Try to get title - different files have different tag formats
+                    if hasattr(audio, 'tags') and audio.tags:
+                        if 'title' in audio:
+                            title = audio['title'][0]
+                        elif 'TIT2' in audio:
+                            title = audio['TIT2'].text[0]
+                        
+                        # Try to get artist
+                        if 'artist' in audio:
+                            artist = audio['artist'][0]
+                        elif 'TPE1' in audio:
+                            artist = audio['TPE1'].text[0]
+                        
+                        # Try to get album
+                        if 'album' in audio:
+                            album = audio['album'][0]
+                        elif 'TALB' in audio:
+                            album = audio['TALB'].text[0]
+                    
+                    # Get length
+                    if hasattr(audio, 'info') and hasattr(audio.info, 'length'):
+                        length_seconds = int(audio.info.length)
+                        minutes, seconds = divmod(length_seconds, 60)
+                        length = f"{int(minutes)}:{int(seconds):02d}"
+                
+                # Create the track in our database
+                track = Track(
+                    title=title,
+                    artist=artist,
+                    album=album,
+                    length=length,
+                    length_seconds=length_seconds,
+                    filename=track_path
+                )
+                db.session.add(track)
+                
+            except Exception as e:
+                current_app.logger.error(f"Error getting metadata for {track_path}: {e}")
+                # Create track with minimal info if metadata extraction fails
+                filename = os.path.basename(track_path)
+                track = Track(
+                    title=filename,
+                    filename=track_path
+                )
+                db.session.add(track)
         
         # Check if track is already in the playlist
         if track in playlist.tracks:
@@ -338,7 +370,10 @@ class PlaylistService:
         if not playlist:
             return False
         
-        # Clear current Audacious playlist
+        # Set as current playlist in our application
+        PlaylistService.set_current_playlist(playlist_id)
+        
+        # Always clear current Audacious playlist to ensure complete reset
         audtool.clear_playlist()
         
         # Apply playlist settings

@@ -9,22 +9,18 @@ main_bp = Blueprint('main', __name__)
 def init_app():
     """Initialize the application on first request."""
     try:
-        # Clear all Audacious playlists on startup
-        num_playlists = audtool.get_number_of_playlists()
-        if num_playlists:
-            for i in range(int(num_playlists)):
-                audtool.set_current_playlist(0)
-                audtool.clear_playlist()
+        # Always maintain a clean slate in Audacious
+        # We'll use it only as a player, not for playlist management
+        audtool.clear_playlist()
         
-        # Check if we need to migrate playlists from Audacious
-        if int(num_playlists or 0) > 0 and Playlist.query.count() == 0:
-            current_app.logger.info("Migrating playlists from Audacious...")
-            PlaylistService.migrate_audacious_playlists()
+        # Option to migrate Audacious playlists is available via the API
+        # instead of doing it automatically here
         
-        # Create a default playlist if none exists
+        # Create a default playlist if none exists in our database
         if Playlist.query.count() == 0:
             current_app.logger.info("Creating default playlist...")
-            PlaylistService.create_playlist("Default")
+            default_playlist = PlaylistService.create_playlist("Default")
+            PlaylistService.set_current_playlist(default_playlist.id)
     except Exception as e:
         current_app.logger.error(f"Error initializing app: {e}")
 
