@@ -37,17 +37,63 @@ def index():
 def status():
     """Get the current player status for the UI."""
     try:
-        current_song = audtool.get_current_song_info()
-        status = audtool.get_playback_status()
-        volume = audtool.get_volume()
-        position = audtool.get_playlist_position()
-        playlist_length = audtool.get_playlist_length()
+        # Get playback status and song info with fallbacks for errors
+        try:
+            current_song = audtool.get_current_song_info()
+        except Exception as e:
+            current_app.logger.error(f"Error getting current song info: {str(e)}")
+            current_song = {
+                'title': None, 'artist': None, 'album': None, 'length': None,
+                'length_seconds': 0, 'position': None, 'position_seconds': 0, 
+                'bitrate': None, 'filename': None
+            }
+            
+        try:
+            status = audtool.get_playback_status()
+        except Exception:
+            status = 'stopped'
+            
+        try:
+            volume = audtool.get_volume()
+            if volume is None:
+                volume = 50  # Default volume
+        except Exception:
+            volume = 50  # Default volume
+            
+        try:
+            position = audtool.get_playlist_position()
+            if position is None:
+                position = 0
+        except Exception:
+            position = 0
+            
+        try:
+            playlist_length = audtool.get_playlist_length()
+            if playlist_length is None or playlist_length == '0':
+                playlist_length = 0
+        except Exception:
+            playlist_length = 0
         
-        # Get settings
-        repeat = audtool.get_repeat_status()
-        shuffle = audtool.get_shuffle_status()
-        stop_after = audtool.get_stop_after_status()
-        auto_advance = audtool.get_auto_advance_status()
+        # Get settings with fallbacks for errors
+        try:
+            repeat = audtool.get_repeat_status()
+        except Exception:
+            repeat = 'off'
+            
+        try:
+            shuffle = audtool.get_shuffle_status()
+        except Exception:
+            shuffle = 'off'
+            
+        try:
+            stop_after = audtool.get_stop_after_status()
+        except Exception:
+            stop_after = 'off'
+            
+        try:
+            auto_advance = audtool.get_auto_advance_status()
+        except Exception:
+            auto_advance = 'on'
         
         # Get all playlists from our database
         playlists = [p.to_dict() for p in PlaylistService.get_all_playlists()]

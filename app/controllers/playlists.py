@@ -382,7 +382,15 @@ def get_current_playlist():
             })
             
         tracks = PlaylistService.get_playlist_tracks(current_playlist.id)
-        current_position = audtool.get_playlist_position()
+        
+        # Try to get the current position, but handle the case when nothing is playing
+        try:
+            current_position = audtool.get_playlist_position()
+            if current_position is None:
+                current_position = 0
+        except Exception:
+            # If audtool command fails, default to 0
+            current_position = 0
         
         return jsonify({
             'success': True,

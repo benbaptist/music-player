@@ -3,20 +3,20 @@ import shlex
 from flask import current_app
 import os
 
-def run_audtool(command, *args):
-    """Run an audtool command and return its output."""
-    cmd = [current_app.config['AUDTOOL_COMMAND'], command]
-    cmd.extend(args)
-    
+def run_audtool(*args):
+    """Run audtool with the given arguments."""
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        cmd = [current_app.config['AUDTOOL_COMMAND']] + list(args)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        
+        if result.returncode != 0:
+            if result.stderr:
+                current_app.logger.error(f"Error in audtool: stderr: {result.stderr}")
+            return None
+        
         return result.stdout.strip()
-    except subprocess.CalledProcessError as e:
-        # Don't log errors for status checking commands that use exit codes as return values
-        status_commands = ['playback-playing', 'playback-paused', 'playback-stopped', 'playback-recording']
-        if command not in status_commands:
-            current_app.logger.error(f"Error running audtool command {cmd}: {e}")
-            current_app.logger.error(f"stderr: {e.stderr}")
+    except Exception as e:
+        current_app.logger.error(f"Error executing audtool: {str(e)}")
         return None
 
 # Player control functions
@@ -118,7 +118,13 @@ def get_playlist_length():
     return run_audtool('playlist-length')
 
 def get_playlist_position():
-    return run_audtool('playlist-position')
+    """Get the current playlist position."""
+    try:
+        position = run_audtool('playlist-position')
+        return int(position) - 1 if position else 0
+    except Exception:
+        # Return 0 if there's no current song or command fails
+        return 0
 
 def jump_to_song(position):
     return run_audtool('playlist-jump', str(position))
