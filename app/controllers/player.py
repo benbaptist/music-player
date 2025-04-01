@@ -166,4 +166,10 @@ def toggle_auto_advance():
 def clear_audacious():
     """Clear the Audacious playlist (to maintain clean slate)."""
     audtool.clear_playlist()
+    return jsonify({'success': True})
+
+@player_bp.route('/jump-to/<int:position>', methods=['POST'])
+def jump_to(position):
+    """Jump to a specific track in the playlist."""
+    audtool.jump_to_song(position + 1)  # audtool uses 1-indexed positions
     return jsonify({'success': True}) 

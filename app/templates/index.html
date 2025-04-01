@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Player - Debug UI</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .debug-section {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .song-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+        .debug-info {
+            background-color: #f8f8f8;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .col-30 {
+            width: 30%;
+            float: left;
+        }
+        .col-70 {
+            width: 70%;
+            float: left;
+        }
+        .row::after {
+            content: "";
+            display: table;
+            clear: both;
+        }
+    </style>
+</head>
+<body>
+    <h1>Music Player - Debug UI</h1>
+    
+    <div class="row">
+        <div class="col-30">
+            <!-- Playlists Management -->
+            <div class="debug-section">
+                <h2>Playlists</h2>
+                <div class="controls">
+                    <input type="text" id="new-playlist-name" placeholder="New Playlist Name">
+                    <button id="create-playlist-btn">Create Playlist</button>
+                </div>
+                <select id="playlist-select" size="10" style="width: 100%"></select>
+                <div class="controls">
+                    <button id="delete-playlist-btn">Delete</button>
+                    <input type="text" id="rename-playlist-input" placeholder="New Name">
+                    <button id="rename-playlist-btn">Rename</button>
+                </div>
+                <button id="set-current-playlist-btn">Set as Current</button>
+            </div>
+            
+            <!-- Playlist Settings -->
+            <div class="debug-section">
+                <h2>Playlist Settings</h2>
+                <div>
+                    <input type="checkbox" id="setting-repeat">
+                    <label for="setting-repeat">Repeat Playlist</label>
+                </div>
+                <div>
+                    <input type="checkbox" id="setting-shuffle">
+                    <label for="setting-shuffle">Shuffle</label>
+                </div>
+                <div>
+                    <input type="checkbox" id="setting-stop-after">
+                    <label for="setting-stop-after">Stop After Current Song</label>
+                </div>
+                <div>
+                    <input type="checkbox" id="setting-auto-advance">
+                    <label for="setting-auto-advance">Auto Advance</label>
+                </div>
+                <button id="save-settings-btn">Save Settings</button>
+            </div>
+        </div>
+        
+        <div class="col-70">
+            <!-- Current Playlist Info and Tracks -->
+            <div class="debug-section">
+                <h2>Current Playlist: <span id="current-playlist-name">None</span></h2>
+                
+                <!-- Add Songs to Playlist -->
+                <div class="controls">
+                    <input type="text" id="add-track-path" placeholder="Path to audio file" style="width: 70%">
+                    <button id="add-track-btn">Add Track</button>
+                </div>
+                
+                <!-- Tracks in Playlist -->
+                <h3>Tracks</h3>
+                <table id="tracks-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Title</th>
+                            <th>Artist</th>
+                            <th>Album</th>
+                            <th>Length</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            
+            <!-- Player Controls -->
+            <div class="debug-section">
+                <h2>Player Controls</h2>
+                <div class="controls">
+                    <button id="play-btn">Play</button>
+                    <button id="pause-btn">Pause</button>
+                    <button id="stop-btn">Stop</button>
+                    <button id="previous-btn">Previous</button>
+                    <button id="next-btn">Next</button>
+                </div>
+                
+                <div>
+                    <label for="volume-slider">Volume:</label>
+                    <input type="range" id="volume-slider" min="0" max="100" value="50">
+                    <span id="volume-value">50</span>%
+                </div>
+                
+                <div>
+                    <label for="seek-slider">Seek:</label>
+                    <input type="range" id="seek-slider" min="0" max="100" value="0" disabled>
+                    <span id="current-time">0:00</span> / <span id="total-time">0:00</span>
+                </div>
+            </div>
+            
+            <!-- Now Playing Info -->
+            <div class="debug-section">
+                <h2>Now Playing</h2>
+                <div id="now-playing-info">
+                    <p><strong>Title:</strong> <span id="current-title">-</span></p>
+                    <p><strong>Artist:</strong> <span id="current-artist">-</span></p>
+                    <p><strong>Album:</strong> <span id="current-album">-</span></p>
+                    <p><strong>Filename:</strong> <span id="current-filename">-</span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Debug Output -->
+    <div class="debug-section">
+        <h2>Debug Output</h2>
+        <div id="debug-output" class="debug-info">Debug information will appear here...</div>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html> 
