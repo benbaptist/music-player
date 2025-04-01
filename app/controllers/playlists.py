@@ -9,10 +9,19 @@ def get_playlists():
     """Get all available playlists."""
     try:
         playlists = PlaylistService.get_all_playlists()
+        current_playlist = PlaylistService.get_current_playlist()
+        current_playlist_id = current_playlist.id if current_playlist else None
+        
+        playlist_data = []
+        for p in playlists:
+            data = p.to_dict()
+            data['is_current'] = (p.id == current_playlist_id)
+            playlist_data.append(data)
         
         return jsonify({
             'success': True,
-            'playlists': [p.to_dict() for p in playlists]
+            'playlists': playlist_data,
+            'current_playlist': current_playlist_id
         })
     except Exception as e:
         return jsonify({
@@ -349,6 +358,59 @@ def scan_watch_path(watch_path_id):
             }), 404
             
         return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@playlists_bp.route('/current', methods=['GET'])
+def get_current_playlist():
+    """Get the current playlist for the UI."""
+    try:
+        current_playlist = PlaylistService.get_current_playlist()
+        
+        if not current_playlist:
+            # If there's no current playlist, create a new one
+            current_playlist = PlaylistService.create_playlist("New Playlist")
+            PlaylistService.set_current_playlist(current_playlist.id)
+            
+            return jsonify({
+                'success': True,
+                'songs': [],
+                'current_position': 0
+            })
+            
+        tracks = PlaylistService.get_playlist_tracks(current_playlist.id)
+        current_position = audtool.get_playlist_position()
+        
+        return jsonify({
+            'success': True,
+            'songs': [t.to_dict() for t in tracks],
+            'current_position': current_position
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@playlists_bp.route('/set-current/<int:playlist_id>', methods=['POST'])
+def set_current_playlist(playlist_id):
+    """Set the current active playlist."""
+    try:
+        playlist = PlaylistService.set_current_playlist(playlist_id)
+        
+        if not playlist:
+            return jsonify({
+                'success': False,
+                'error': f'Playlist with ID {playlist_id} not found'
+            }), 404
+            
+        return jsonify({
+            'success': True,
+            'playlist': playlist.to_dict()
+        })
     except Exception as e:
         return jsonify({
             'success': False,

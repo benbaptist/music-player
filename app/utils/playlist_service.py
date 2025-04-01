@@ -7,6 +7,10 @@ from pathlib import Path
 import subprocess
 import json
 
+# Store the current playlist ID in memory
+# This is a simple solution since we can't modify the database schema
+_current_playlist_id = None
+
 class PlaylistService:
     @staticmethod
     def get_all_playlists():
@@ -53,6 +57,32 @@ class PlaylistService:
         if playlist:
             return playlist.get_tracks()
         return []
+    
+    @staticmethod
+    def get_current_playlist():
+        """Get the current active playlist."""
+        global _current_playlist_id
+        if not _current_playlist_id:
+            # Try to find the first playlist if none is set
+            first_playlist = Playlist.query.first()
+            if first_playlist:
+                _current_playlist_id = first_playlist.id
+            else:
+                return None
+        
+        return Playlist.query.get(_current_playlist_id)
+    
+    @staticmethod
+    def set_current_playlist(playlist_id):
+        """Set a playlist as the current active playlist."""
+        global _current_playlist_id
+        
+        # Set the new current playlist
+        playlist = Playlist.query.get(playlist_id)
+        if playlist:
+            _current_playlist_id = playlist.id
+            return playlist
+        return None
     
     @staticmethod
     def add_track_to_playlist(playlist_id, track_path):

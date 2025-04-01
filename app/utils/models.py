@@ -45,7 +45,8 @@ class Playlist(db.Model):
                 'stop_after_current': self.stop_after_current,
                 'auto_advance': self.auto_advance
             },
-            'tracks_count': len(self.tracks)
+            'tracks_count': len(self.tracks),
+            'is_current': False  # This will be set dynamically by the service
         }
     
     def get_tracks(self):
