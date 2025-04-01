@@ -21,6 +21,9 @@ def expand_path(path):
 SECRET_KEY = os.getenv('SECRET_KEY', 'dev_key')
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
+# Database settings
+DATABASE_URI = os.getenv('DATABASE_URI', 'sqlite:///instance/app.db')
+
 # Audacious settings
 AUDACIOUS_DEFAULT_DIR = expand_path(os.getenv('AUDACIOUS_DEFAULT_DIR', '~/Music'))
 AUDTOOL_COMMAND = os.getenv('AUDTOOL_COMMAND', 'audtool')

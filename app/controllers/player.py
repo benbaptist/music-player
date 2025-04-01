@@ -1,7 +1,26 @@
 from flask import Blueprint, jsonify, request
 from app.utils import audtool
+from app.utils.models import Track, db
 
 player_bp = Blueprint('player', __name__)
+
+@player_bp.route('/status', methods=['GET'])
+def get_status():
+    """Get the current playback status and song information."""
+    status = audtool.get_playback_status()
+    song_info = audtool.get_current_song_info()
+    
+    # Try to find the track in our database by filename
+    track = None
+    if song_info.get('filename'):
+        track = Track.query.filter_by(filename=song_info['filename']).first()
+    
+    return jsonify({
+        'success': True,
+        'status': status,
+        'song': song_info,
+        'track_id': track.id if track else None
+    })
 
 @player_bp.route('/play', methods=['POST'])
 def play():
@@ -141,4 +160,10 @@ def toggle_stop_after():
 def toggle_auto_advance():
     """Toggle auto advance setting."""
     audtool.toggle_auto_advance()
+    return jsonify({'success': True})
+
+@player_bp.route('/clear', methods=['POST'])
+def clear_audacious():
+    """Clear the Audacious playlist (to maintain clean slate)."""
+    audtool.clear_playlist()
     return jsonify({'success': True}) 
