@@ -156,11 +156,22 @@ class PlaylistService:
                 db.session.add(track)
         
         # Check if track is already in the playlist
-        if track in playlist.tracks:
-            return track
+        existing_entry = db.session.query(playlist_tracks).filter(
+            (playlist_tracks.c.playlist_id == playlist.id) &
+            (playlist_tracks.c.track_id == track.id)
+        ).first()
         
-        # Get the next position in the playlist
-        position = len(playlist.tracks)
+        if existing_entry:
+            return track
+
+        # Get the next position in the playlist by finding the max position
+        max_position_result = db.session.query(
+            db.func.max(playlist_tracks.c.position)
+        ).filter(
+            playlist_tracks.c.playlist_id == playlist.id
+        ).scalar()
+        
+        position = (max_position_result + 1) if max_position_result is not None else 0
         
         # Add track to playlist
         statement = playlist_tracks.insert().values(
@@ -406,7 +417,11 @@ class PlaylistService:
                 audtool.toggle_auto_advance()
         
         # Add each track to Audacious
-        for track in playlist.get_tracks():
+        tracks = playlist.get_tracks()
+        current_app.logger.info(f"Loading {len(tracks)} tracks to Audacious for playlist {playlist_id}")
+        
+        for i, track in enumerate(tracks):
+            current_app.logger.info(f"Adding track {i+1}: {track.filename}")
             audtool.add_song(track.filename)
         
         return True

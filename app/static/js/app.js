@@ -349,6 +349,10 @@ function setupEventHandlers() {
         }
     });
     
+    document.getElementById('create-test-playlist-btn').addEventListener('click', () => {
+        createTestPlaylist();
+    });
+    
     document.getElementById('delete-playlist-btn').addEventListener('click', () => {
         const select = document.getElementById('playlist-select');
         if (select.value) {
@@ -371,6 +375,13 @@ function setupEventHandlers() {
         const select = document.getElementById('playlist-select');
         if (select.value) {
             setCurrentPlaylist(select.value);
+        }
+    });
+    
+    document.getElementById('debug-playlist-btn').addEventListener('click', () => {
+        const select = document.getElementById('playlist-select');
+        if (select.value) {
+            debugPlaylist(select.value);
         }
     });
     
@@ -433,6 +444,26 @@ function startStatusUpdates() {
     
     // Then set an interval to update every second
     updateInterval = setInterval(updatePlayerStatus, 1000);
+}
+
+// Debug a playlist
+async function debugPlaylist(playlistId) {
+    const response = await fetchAPI(`/playlists/${playlistId}/debug`);
+    
+    if (response.success) {
+        logDebug(`Debug info for playlist ${playlistId}`, response.debug);
+        console.log('Playlist Debug Info:', response.debug);
+    }
+}
+
+// Create a test playlist
+async function createTestPlaylist() {
+    const response = await fetchAPI('/playlists/test-create', 'POST');
+    
+    if (response.success) {
+        logDebug('Created test playlist', response);
+        await loadPlaylists();
+    }
 }
 
 // Initialize the application when DOM is loaded

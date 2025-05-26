@@ -45,13 +45,18 @@ class Playlist(db.Model):
                 'stop_after_current': self.stop_after_current,
                 'auto_advance': self.auto_advance
             },
-            'tracks_count': len(self.tracks),
+            'tracks_count': len(self.get_tracks()),
             'is_current': False  # This will be set dynamically by the service
         }
     
     def get_tracks(self):
-        # Get tracks in proper order
-        return self.tracks
+        # Get tracks in proper order using explicit query
+        from sqlalchemy import text
+        return db.session.query(Track).join(
+            playlist_tracks, Track.id == playlist_tracks.c.track_id
+        ).filter(
+            playlist_tracks.c.playlist_id == self.id
+        ).order_by(playlist_tracks.c.position).all()
 
 class Track(db.Model):
     __tablename__ = 'tracks'
