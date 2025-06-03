@@ -1,5 +1,5 @@
 from flask import Flask
-from app.utils.models import db
+from app.utils.data_service import data_service
 import os
 
 def create_app():
@@ -8,10 +8,9 @@ def create_app():
     # Load configuration
     app.config.from_object('config')
     
-    # Set up database
-    app.config['SQLALCHEMY_DATABASE_URI'] = app.config.get('DATABASE_URI', 'sqlite:///app.db')
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    db.init_app(app)
+    # Initialize Storify data service
+    # This will create the data directory and initialize databases
+    data_service.storify  # Access to initialize
     
     # Ensure the instance folder exists
     os.makedirs(app.instance_path, exist_ok=True)
@@ -27,8 +26,9 @@ def create_app():
     app.register_blueprint(playlists_bp, url_prefix='/playlists')
     app.register_blueprint(files_bp, url_prefix='/files')
     
-    # Create database tables
-    with app.app_context():
-        db.create_all()
+    # Register cleanup handler
+    @app.teardown_appcontext
+    def close_data_service(error):
+        data_service.flush_all()
     
     return app 

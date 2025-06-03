@@ -291,10 +291,12 @@ def get_watch_paths(playlist_id):
                 'success': False,
                 'error': f'Playlist with ID {playlist_id} not found'
             }), 404
+        
+        watch_paths = PlaylistService.get_watch_paths_for_playlist(playlist_id)
             
         return jsonify({
             'success': True,
-            'watch_paths': [wp.to_dict() for wp in playlist.watch_paths]
+            'watch_paths': [wp.to_dict() for wp in watch_paths]
         })
     except Exception as e:
         return jsonify({
@@ -450,19 +452,12 @@ def debug_playlist(playlist_id):
         # Get tracks using the proper method
         tracks = PlaylistService.get_playlist_tracks(playlist_id)
         
-        # Get raw relationship data
-        raw_tracks = playlist.tracks
-        
-        # Get association table data
-        from app.utils.models import playlist_tracks, db
-        association_data = db.session.query(playlist_tracks).filter(
-            playlist_tracks.c.playlist_id == playlist_id
-        ).order_by(playlist_tracks.c.position).all()
-        
         debug_info = {
             'playlist_id': playlist_id,
             'playlist_name': playlist.name,
-            'tracks_via_get_tracks': [
+            'track_ids': playlist.track_ids,
+            'tracks_count': len(tracks),
+            'tracks': [
                 {
                     'id': t.id,
                     'title': t.title,
@@ -470,24 +465,11 @@ def debug_playlist(playlist_id):
                     'position': i
                 } for i, t in enumerate(tracks)
             ],
-            'tracks_via_relationship': [
-                {
-                    'id': t.id,
-                    'title': t.title,
-                    'filename': t.filename
-                } for t in raw_tracks
-            ],
-            'association_table_data': [
-                {
-                    'playlist_id': row.playlist_id,
-                    'track_id': row.track_id,
-                    'position': row.position
-                } for row in association_data
-            ],
-            'counts': {
-                'get_tracks_count': len(tracks),
-                'relationship_count': len(raw_tracks),
-                'association_count': len(association_data)
+            'playlist_settings': {
+                'shuffle': playlist.shuffle,
+                'repeat': playlist.repeat,
+                'stop_after_current': playlist.stop_after_current,
+                'auto_advance': playlist.auto_advance
             }
         }
         
@@ -516,19 +498,7 @@ def test_create_playlist():
         ]
         
         for track_path in test_tracks:
-            # Create track manually for testing
-            from app.utils.models import Track, db
-            track = Track(
-                title=f"Test Track - {track_path.split('/')[-1]}",
-                filename=track_path,
-                artist="Test Artist",
-                album="Test Album",
-                length="3:30"
-            )
-            db.session.add(track)
-            db.session.flush()  # Get the ID
-            
-            # Add to playlist using the service
+            # Add track to playlist using the service (this will create the track)
             PlaylistService.add_track_to_playlist(playlist.id, track_path)
         
         return jsonify({

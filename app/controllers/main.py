@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, jsonify, current_app
 from app.utils import audtool
 from app.utils.playlist_service import PlaylistService
-from app.utils.models import Playlist, db
+from app.utils.data_service import data_service
 
 main_bp = Blueprint('main', __name__)
 
@@ -17,7 +17,8 @@ def init_app():
         # instead of doing it automatically here
         
         # Create a default playlist if none exists in our database
-        if Playlist.query.count() == 0:
+        playlists = PlaylistService.get_all_playlists()
+        if len(playlists) == 0:
             current_app.logger.info("Creating default playlist...")
             default_playlist = PlaylistService.create_playlist("Default")
             PlaylistService.set_current_playlist(default_playlist.id)
@@ -97,10 +98,11 @@ def status():
         # Try to find the track in our database
         track_id = None
         if current_song.get('filename'):
-            from app.utils.models import Track
-            track = Track.query.filter_by(filename=current_song['filename']).first()
-            if track:
-                track_id = track.id
+            tracks_db = data_service.get_tracks_db()
+            for track in tracks_db.data.values():
+                if hasattr(track, 'filename') and track.filename == current_song['filename']:
+                    track_id = track.id
+                    break
         
         return jsonify({
             'success': True,

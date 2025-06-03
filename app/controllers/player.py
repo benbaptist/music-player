@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 from app.utils import audtool
-from app.utils.models import Track, db
+from app.utils.data_service import data_service
 
 player_bp = Blueprint('player', __name__)
 
@@ -13,7 +13,11 @@ def get_status():
     # Try to find the track in our database by filename
     track = None
     if song_info.get('filename'):
-        track = Track.query.filter_by(filename=song_info['filename']).first()
+        tracks_db = data_service.get_tracks_db()
+        for existing_track in tracks_db.data.values():
+            if hasattr(existing_track, 'filename') and existing_track.filename == song_info['filename']:
+                track = existing_track
+                break
     
     return jsonify({
         'success': True,

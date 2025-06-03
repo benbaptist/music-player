@@ -1,37 +1,59 @@
-from flask_sqlalchemy import SQLAlchemy
+from storify.model import Model
 from datetime import datetime
-import json
+import uuid
 
-db = SQLAlchemy()
 
-# Association table for many-to-many relationship between playlists and tracks
-playlist_tracks = db.Table('playlist_tracks',
-    db.Column('playlist_id', db.Integer, db.ForeignKey('playlists.id'), primary_key=True),
-    db.Column('track_id', db.Integer, db.ForeignKey('tracks.id'), primary_key=True),
-    db.Column('position', db.Integer, nullable=False)
-)
-
-class Playlist(db.Model):
-    __tablename__ = 'playlists'
+class Playlist(Model):
+    def __init__(self, playlist_id=None, name=None, created_at=None, updated_at=None,
+                 shuffle=False, repeat=False, stop_after_current=False, auto_advance=True,
+                 tracks=None, watch_paths=None):
+        self.id = playlist_id or str(uuid.uuid4())
+        self.name = name or "New Playlist"
+        self.created_at = created_at or datetime.utcnow()
+        self.updated_at = updated_at or datetime.utcnow()
+        
+        # Playlist settings
+        self.shuffle = shuffle
+        self.repeat = repeat
+        self.stop_after_current = stop_after_current
+        self.auto_advance = auto_advance
+        
+        # Track IDs in order
+        self.track_ids = tracks or []
+        
+        # Watch paths for this playlist
+        self.watch_paths = watch_paths or []
     
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    def _to_dict(self):
+        """Convert to dictionary for Storify serialization."""
+        return {
+            'id': self.id,
+            'name': self.name,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat(),
+            'shuffle': self.shuffle,
+            'repeat': self.repeat,
+            'stop_after_current': self.stop_after_current,
+            'auto_advance': self.auto_advance,
+            'track_ids': self.track_ids,
+            'watch_paths': self.watch_paths
+        }
     
-    # Playlist settings
-    shuffle = db.Column(db.Boolean, default=False)
-    repeat = db.Column(db.Boolean, default=False)
-    stop_after_current = db.Column(db.Boolean, default=False)
-    auto_advance = db.Column(db.Boolean, default=True)
-    
-    # Relationship to tracks through the association table
-    tracks = db.relationship('Track', secondary=playlist_tracks, 
-                            order_by=playlist_tracks.c.position,
-                            backref=db.backref('playlists', lazy='dynamic'))
-    
-    # Relationship to watch paths
-    watch_paths = db.relationship('WatchPath', backref='playlist', lazy=True, cascade="all, delete-orphan")
+    @classmethod
+    def _from_dict(cls, data):
+        """Create instance from dictionary for Storify deserialization."""
+        return cls(
+            playlist_id=data['id'],
+            name=data['name'],
+            created_at=datetime.fromisoformat(data['created_at']),
+            updated_at=datetime.fromisoformat(data['updated_at']),
+            shuffle=data['shuffle'],
+            repeat=data['repeat'],
+            stop_after_current=data['stop_after_current'],
+            auto_advance=data['auto_advance'],
+            tracks=data['track_ids'],
+            watch_paths=data['watch_paths']
+        )
     
     def to_dict(self):
         return {
@@ -45,35 +67,57 @@ class Playlist(db.Model):
                 'stop_after_current': self.stop_after_current,
                 'auto_advance': self.auto_advance
             },
-            'tracks_count': len(self.get_tracks()),
+            'tracks_count': len(self.track_ids),
             'is_current': False  # This will be set dynamically by the service
         }
     
-    def get_tracks(self):
-        # Get tracks in proper order using explicit query
-        from sqlalchemy import text
-        return db.session.query(Track).join(
-            playlist_tracks, Track.id == playlist_tracks.c.track_id
-        ).filter(
-            playlist_tracks.c.playlist_id == self.id
-        ).order_by(playlist_tracks.c.position).all()
+    def update_timestamp(self):
+        self.updated_at = datetime.utcnow()
 
-class Track(db.Model):
-    __tablename__ = 'tracks'
+
+class Track(Model):
+    def __init__(self, track_id=None, title=None, artist=None, album=None, 
+                 length=None, length_seconds=None, filename=None, created_at=None):
+        self.id = track_id or str(uuid.uuid4())
+        self.title = title
+        self.artist = artist
+        self.album = album
+        self.length = length
+        self.length_seconds = length_seconds
+        self.filename = filename
+        self.created_at = created_at or datetime.utcnow()
     
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(255), nullable=True)
-    artist = db.Column(db.String(255), nullable=True)
-    album = db.Column(db.String(255), nullable=True)
-    length = db.Column(db.String(20), nullable=True)  # Format: MM:SS
-    length_seconds = db.Column(db.Integer, nullable=True)
-    filename = db.Column(db.String(1024), nullable=False, unique=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    def _to_dict(self):
+        """Convert to dictionary for Storify serialization."""
+        return {
+            'id': self.id,
+            'title': self.title,
+            'artist': self.artist,
+            'album': self.album,
+            'length': self.length,
+            'length_seconds': self.length_seconds,
+            'filename': self.filename,
+            'created_at': self.created_at.isoformat()
+        }
+    
+    @classmethod
+    def _from_dict(cls, data):
+        """Create instance from dictionary for Storify deserialization."""
+        return cls(
+            track_id=data['id'],
+            title=data['title'],
+            artist=data['artist'],
+            album=data['album'],
+            length=data['length'],
+            length_seconds=data['length_seconds'],
+            filename=data['filename'],
+            created_at=datetime.fromisoformat(data['created_at'])
+        )
     
     def to_dict(self):
         return {
             'id': self.id,
-            'title': self.title or self.filename.split('/')[-1],
+            'title': self.title or (self.filename.split('/')[-1] if self.filename else 'Unknown'),
             'artist': self.artist,
             'album': self.album,
             'length': self.length,
@@ -81,15 +125,39 @@ class Track(db.Model):
             'filename': self.filename
         }
 
-class WatchPath(db.Model):
-    __tablename__ = 'watch_paths'
+
+class WatchPath(Model):
+    def __init__(self, watch_path_id=None, path=None, recursive=True, auto_add=True, 
+                 playlist_id=None, created_at=None):
+        self.id = watch_path_id or str(uuid.uuid4())
+        self.path = path
+        self.recursive = recursive
+        self.auto_add = auto_add
+        self.playlist_id = playlist_id
+        self.created_at = created_at or datetime.utcnow()
     
-    id = db.Column(db.Integer, primary_key=True)
-    path = db.Column(db.String(1024), nullable=False)
-    recursive = db.Column(db.Boolean, default=True)
-    auto_add = db.Column(db.Boolean, default=True)
-    playlist_id = db.Column(db.Integer, db.ForeignKey('playlists.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    def _to_dict(self):
+        """Convert to dictionary for Storify serialization."""
+        return {
+            'id': self.id,
+            'path': self.path,
+            'recursive': self.recursive,
+            'auto_add': self.auto_add,
+            'playlist_id': self.playlist_id,
+            'created_at': self.created_at.isoformat()
+        }
+    
+    @classmethod
+    def _from_dict(cls, data):
+        """Create instance from dictionary for Storify deserialization."""
+        return cls(
+            watch_path_id=data['id'],
+            path=data['path'],
+            recursive=data['recursive'],
+            auto_add=data['auto_add'],
+            playlist_id=data['playlist_id'],
+            created_at=datetime.fromisoformat(data['created_at'])
+        )
     
     def to_dict(self):
         return {

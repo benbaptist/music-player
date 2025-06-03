@@ -1,4 +1,5 @@
-from app.utils.models import db, Playlist, Track, WatchPath
+from app.utils.models import Playlist, Track, WatchPath
+from app.utils.data_service import data_service
 from app.utils import audtool
 import os
 from flask import current_app
@@ -17,48 +18,71 @@ class PlaylistService:
     @staticmethod
     def get_all_playlists():
         """Get all playlists in the database."""
-        return Playlist.query.all()
+        playlists_db = data_service.get_playlists_db()
+        playlists = []
+        for playlist_id, playlist_data in playlists_db.data.items():
+            if isinstance(playlist_data, Playlist):
+                playlists.append(playlist_data)
+        return playlists
     
     @staticmethod
     def get_playlist(playlist_id):
         """Get a playlist by ID."""
-        return Playlist.query.get(playlist_id)
+        playlists_db = data_service.get_playlists_db()
+        return playlists_db.data.get(playlist_id)
     
     @staticmethod
     def create_playlist(name):
         """Create a new playlist."""
         playlist = Playlist(name=name)
-        db.session.add(playlist)
-        db.session.commit()
+        playlists_db = data_service.get_playlists_db()
+        playlists_db[playlist.id] = playlist
         return playlist
     
     @staticmethod
     def rename_playlist(playlist_id, name):
         """Rename a playlist."""
-        playlist = Playlist.query.get(playlist_id)
+        playlists_db = data_service.get_playlists_db()
+        playlist = playlists_db.data.get(playlist_id)
         if playlist:
             playlist.name = name
-            db.session.commit()
+            playlist.update_timestamp()
             return playlist
         return None
     
     @staticmethod
     def delete_playlist(playlist_id):
         """Delete a playlist."""
-        playlist = Playlist.query.get(playlist_id)
-        if playlist:
-            db.session.delete(playlist)
-            db.session.commit()
+        playlists_db = data_service.get_playlists_db()
+        if playlist_id in playlists_db.data:
+            # Also remove associated watch paths
+            watch_paths_db = data_service.get_watch_paths_db()
+            watch_paths_to_remove = []
+            for wp_id, wp in watch_paths_db.data.items():
+                if isinstance(wp, WatchPath) and wp.playlist_id == playlist_id:
+                    watch_paths_to_remove.append(wp_id)
+            
+            for wp_id in watch_paths_to_remove:
+                del watch_paths_db[wp_id]
+            
+            del playlists_db[playlist_id]
             return True
         return False
     
     @staticmethod
     def get_playlist_tracks(playlist_id):
         """Get all tracks in a playlist."""
-        playlist = Playlist.query.get(playlist_id)
-        if playlist:
-            return playlist.get_tracks()
-        return []
+        playlist = PlaylistService.get_playlist(playlist_id)
+        if not playlist:
+            return []
+        
+        tracks_db = data_service.get_tracks_db()
+        tracks = []
+        for track_id in playlist.track_ids:
+            track = tracks_db.data.get(track_id)
+            if track and isinstance(track, Track):
+                tracks.append(track)
+        return tracks
     
     @staticmethod
     def get_current_playlist():
@@ -66,21 +90,20 @@ class PlaylistService:
         global _current_playlist_id
         if not _current_playlist_id:
             # Try to find the first playlist if none is set
-            first_playlist = Playlist.query.first()
-            if first_playlist:
-                _current_playlist_id = first_playlist.id
+            playlists = PlaylistService.get_all_playlists()
+            if playlists:
+                _current_playlist_id = playlists[0].id
             else:
                 return None
         
-        return Playlist.query.get(_current_playlist_id)
+        return PlaylistService.get_playlist(_current_playlist_id)
     
     @staticmethod
     def set_current_playlist(playlist_id):
         """Set a playlist as the current active playlist."""
         global _current_playlist_id
         
-        # Set the new current playlist
-        playlist = Playlist.query.get(playlist_id)
+        playlist = PlaylistService.get_playlist(playlist_id)
         if playlist:
             _current_playlist_id = playlist.id
             return playlist
@@ -89,15 +112,21 @@ class PlaylistService:
     @staticmethod
     def add_track_to_playlist(playlist_id, track_path):
         """Add a track to a playlist."""
-        playlist = Playlist.query.get(playlist_id)
+        playlist = PlaylistService.get_playlist(playlist_id)
         if not playlist:
             return None
         
+        tracks_db = data_service.get_tracks_db()
+        
         # Check if track already exists in the database
-        track = Track.query.filter_by(filename=track_path).first()
+        track = None
+        for existing_track in tracks_db.data.values():
+            if isinstance(existing_track, Track) and existing_track.filename == track_path:
+                track = existing_track
+                break
         
         if not track:
-            # Get track metadata using mutagen instead of audacious
+            # Get track metadata using mutagen
             try:
                 # Default values
                 title = os.path.basename(track_path)
@@ -143,7 +172,7 @@ class PlaylistService:
                     length_seconds=length_seconds,
                     filename=track_path
                 )
-                db.session.add(track)
+                tracks_db[track.id] = track
                 
             except Exception as e:
                 current_app.logger.error(f"Error getting metadata for {track_path}: {e}")
@@ -153,138 +182,49 @@ class PlaylistService:
                     title=filename,
                     filename=track_path
                 )
-                db.session.add(track)
+                tracks_db[track.id] = track
         
         # Check if track is already in the playlist
-        existing_entry = db.session.query(playlist_tracks).filter(
-            (playlist_tracks.c.playlist_id == playlist.id) &
-            (playlist_tracks.c.track_id == track.id)
-        ).first()
-        
-        if existing_entry:
+        if track.id in playlist.track_ids:
             return track
 
-        # Get the next position in the playlist by finding the max position
-        max_position_result = db.session.query(
-            db.func.max(playlist_tracks.c.position)
-        ).filter(
-            playlist_tracks.c.playlist_id == playlist.id
-        ).scalar()
-        
-        position = (max_position_result + 1) if max_position_result is not None else 0
-        
         # Add track to playlist
-        statement = playlist_tracks.insert().values(
-            playlist_id=playlist.id,
-            track_id=track.id,
-            position=position
-        )
-        db.session.execute(statement)
-        db.session.commit()
+        playlist.track_ids.append(track.id)
+        playlist.update_timestamp()
         
         return track
     
     @staticmethod
     def remove_track_from_playlist(playlist_id, track_id):
         """Remove a track from a playlist."""
-        playlist = Playlist.query.get(playlist_id)
-        track = Track.query.get(track_id)
-        
-        if playlist and track and track in playlist.tracks:
-            # Get current position of track
-            stmt = playlist_tracks.select().where(
-                (playlist_tracks.c.playlist_id == playlist_id) & 
-                (playlist_tracks.c.track_id == track_id)
-            )
-            result = db.session.execute(stmt).first()
-            position = result.position if result else -1
-            
-            # Remove track from playlist
-            playlist.tracks.remove(track)
-            
-            # Reorder positions of tracks after the removed one
-            if position >= 0:
-                stmt = playlist_tracks.update().where(
-                    (playlist_tracks.c.playlist_id == playlist_id) & 
-                    (playlist_tracks.c.position > position)
-                ).values(
-                    position=playlist_tracks.c.position - 1
-                )
-                db.session.execute(stmt)
-            
-            db.session.commit()
+        playlist = PlaylistService.get_playlist(playlist_id)
+        if playlist and track_id in playlist.track_ids:
+            playlist.track_ids.remove(track_id)
+            playlist.update_timestamp()
             return True
         return False
     
     @staticmethod
     def reorder_track(playlist_id, track_id, new_position):
         """Reorder a track within a playlist."""
-        playlist = Playlist.query.get(playlist_id)
-        track = Track.query.get(track_id)
-        
-        if not playlist or not track or track not in playlist.tracks:
+        playlist = PlaylistService.get_playlist(playlist_id)
+        if not playlist or track_id not in playlist.track_ids:
             return False
         
-        # Get current position
-        stmt = playlist_tracks.select().where(
-            (playlist_tracks.c.playlist_id == playlist_id) & 
-            (playlist_tracks.c.track_id == track_id)
-        )
-        result = db.session.execute(stmt).first()
-        current_position = result.position if result else -1
+        # Remove track from current position
+        current_position = playlist.track_ids.index(track_id)
+        playlist.track_ids.pop(current_position)
         
-        if current_position == -1:
-            return False
-        
-        # Ensure new_position is within valid range
-        track_count = len(playlist.tracks)
-        if new_position < 0:
-            new_position = 0
-        elif new_position >= track_count:
-            new_position = track_count - 1
-        
-        # No change needed if position is the same
-        if current_position == new_position:
-            return True
-        
-        # Update positions
-        if current_position < new_position:
-            # Moving down: decrement positions of tracks between current and new
-            stmt = playlist_tracks.update().where(
-                (playlist_tracks.c.playlist_id == playlist_id) & 
-                (playlist_tracks.c.position > current_position) &
-                (playlist_tracks.c.position <= new_position)
-            ).values(
-                position=playlist_tracks.c.position - 1
-            )
-            db.session.execute(stmt)
-        else:
-            # Moving up: increment positions of tracks between new and current
-            stmt = playlist_tracks.update().where(
-                (playlist_tracks.c.playlist_id == playlist_id) & 
-                (playlist_tracks.c.position >= new_position) &
-                (playlist_tracks.c.position < current_position)
-            ).values(
-                position=playlist_tracks.c.position + 1
-            )
-            db.session.execute(stmt)
-        
-        # Update position of the track itself
-        stmt = playlist_tracks.update().where(
-            (playlist_tracks.c.playlist_id == playlist_id) & 
-            (playlist_tracks.c.track_id == track_id)
-        ).values(
-            position=new_position
-        )
-        db.session.execute(stmt)
-        db.session.commit()
+        # Insert at new position
+        playlist.track_ids.insert(new_position, track_id)
+        playlist.update_timestamp()
         
         return True
     
     @staticmethod
     def update_playlist_settings(playlist_id, settings):
         """Update playlist settings."""
-        playlist = Playlist.query.get(playlist_id)
+        playlist = PlaylistService.get_playlist(playlist_id)
         if playlist:
             if 'shuffle' in settings:
                 playlist.shuffle = settings['shuffle']
@@ -295,25 +235,31 @@ class PlaylistService:
             if 'auto_advance' in settings:
                 playlist.auto_advance = settings['auto_advance']
             
-            db.session.commit()
+            playlist.update_timestamp()
             return playlist
         return None
     
     @staticmethod
     def add_watch_path(playlist_id, path, recursive=True, auto_add=True):
         """Add a path to watch for new audio files."""
-        playlist = Playlist.query.get(playlist_id)
+        playlist = PlaylistService.get_playlist(playlist_id)
         if not playlist:
             return None
         
         path = os.path.abspath(os.path.expanduser(path))
         
+        watch_paths_db = data_service.get_watch_paths_db()
+        
         # Check if path already exists for the playlist
-        existing = WatchPath.query.filter_by(playlist_id=playlist_id, path=path).first()
+        existing = None
+        for wp in watch_paths_db.data.values():
+            if isinstance(wp, WatchPath) and wp.playlist_id == playlist_id and wp.path == path:
+                existing = wp
+                break
+        
         if existing:
             existing.recursive = recursive
             existing.auto_add = auto_add
-            db.session.commit()
             return existing
         
         # Create new watch path
@@ -323,8 +269,7 @@ class PlaylistService:
             auto_add=auto_add,
             playlist_id=playlist_id
         )
-        db.session.add(watch_path)
-        db.session.commit()
+        watch_paths_db[watch_path.id] = watch_path
         
         # If auto_add is True, scan the directory and add files
         if auto_add:
@@ -335,18 +280,18 @@ class PlaylistService:
     @staticmethod
     def remove_watch_path(watch_path_id):
         """Remove a watch path."""
-        watch_path = WatchPath.query.get(watch_path_id)
-        if watch_path:
-            db.session.delete(watch_path)
-            db.session.commit()
+        watch_paths_db = data_service.get_watch_paths_db()
+        if watch_path_id in watch_paths_db.data:
+            del watch_paths_db[watch_path_id]
             return True
         return False
     
     @staticmethod
     def scan_watch_path(watch_path_id):
         """Scan a watch path and add files to the playlist."""
-        watch_path = WatchPath.query.get(watch_path_id)
-        if not watch_path:
+        watch_paths_db = data_service.get_watch_paths_db()
+        watch_path = watch_paths_db.data.get(watch_path_id)
+        if not watch_path or not isinstance(watch_path, WatchPath):
             return False
         
         # Get all audio files in the path
@@ -375,9 +320,19 @@ class PlaylistService:
         return True
     
     @staticmethod
+    def get_watch_paths_for_playlist(playlist_id):
+        """Get all watch paths for a playlist."""
+        watch_paths_db = data_service.get_watch_paths_db()
+        watch_paths = []
+        for wp in watch_paths_db.data.values():
+            if isinstance(wp, WatchPath) and wp.playlist_id == playlist_id:
+                watch_paths.append(wp)
+        return watch_paths
+    
+    @staticmethod
     def load_playlist_to_audacious(playlist_id):
         """Load a playlist to Audacious."""
-        playlist = Playlist.query.get(playlist_id)
+        playlist = PlaylistService.get_playlist(playlist_id)
         if not playlist:
             return False
         
@@ -417,7 +372,7 @@ class PlaylistService:
                 audtool.toggle_auto_advance()
         
         # Add each track to Audacious
-        tracks = playlist.get_tracks()
+        tracks = PlaylistService.get_playlist_tracks(playlist_id)
         current_app.logger.info(f"Loading {len(tracks)} tracks to Audacious for playlist {playlist_id}")
         
         for i, track in enumerate(tracks):
@@ -457,20 +412,9 @@ class PlaylistService:
             
             # Add songs to playlist
             for song in songs:
-                # Find or create track
-                track = Track.query.filter_by(filename=song['filename']).first()
-                if not track:
-                    track = Track(
-                        title=song['title'],
-                        filename=song['filename'],
-                        length=song['length']
-                    )
-                    db.session.add(track)
-                
-                # Add to playlist
-                playlist.tracks.append(track)
+                # Add track to playlist (this will create the track if it doesn't exist)
+                PlaylistService.add_track_to_playlist(playlist.id, song['filename'])
             
-            db.session.commit()
             imported_playlists.append(playlist)
             
             # Restore current playlist
@@ -478,5 +422,3 @@ class PlaylistService:
         
         return imported_playlists
         
-# Import from models to make the association table accessible
-from app.utils.models import playlist_tracks 
