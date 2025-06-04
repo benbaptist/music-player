@@ -17,6 +17,7 @@ A modern, responsive web UI for controlling Audacious music player remotely. Thi
 - Flask
 - Audacious music player
 - `audtool` command-line utility (comes with Audacious)
+- `storify` package for simple database
 
 ## Installation
 
